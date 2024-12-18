@@ -1,0 +1,56 @@
+Script to fetch Netbrain asset list to Splunk
+#Replace Splunk URL,Netbrain URL,API and Splunk HEC tokens
+
+
+import requests
+import json
+
+# NetBrain API credentials and endpoints
+netbrain_url = "https://your-netbrain-instance.com/api"
+netbrain_username = "your_username"
+netbrain_password = "your_password"
+
+# Splunk HEC details
+splunk_hec_url = "https://your-splunk-instance:8088/services/collector"
+splunk_hec_token = "your_hec_token"
+
+# Authenticate with NetBrain
+auth_payload = {
+    "username": netbrain_username,
+    "password": netbrain_password
+}
+auth_response = requests.post(f"{netbrain_url}/v1/session", json=auth_payload)
+token = auth_response.json()["token"]
+
+# Fetch assets from NetBrain
+headers = {"Token": token}
+assets_response = requests.get(f"{netbrain_url}/v1/devices", headers=headers)
+assets = assets_response.json()
+
+# Format assets for Splunk
+formatted_assets = []
+for asset in assets:
+    formatted_asset = {
+        "ip": asset.get("mgmtIP"),
+        "mac": asset.get("macAddress"),
+        "nt_host": asset.get("hostname"),
+        "dns": asset.get("dnsName"),
+        "category": "netbrain_asset"
+    }
+    formatted_assets.append(formatted_asset)
+
+# Send to Splunk HEC
+headers = {
+    "Authorization": f"Splunk {splunk_hec_token}",
+    "Content-Type": "application/json"
+}
+for asset in formatted_assets:
+    payload = {
+        "event": asset,
+        "sourcetype": "netbrain:asset"
+    }
+    response = requests.post(splunk_hec_url, headers=headers, json=payload)
+    if response.status_code != 200:
+        print(f"Failed to send asset: {asset['ip']}")
+
+print("Asset data sent to Splunk successfully")
